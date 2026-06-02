@@ -1,4 +1,4 @@
-// lib/main.dart
+
 import 'package:blokoyunu/oyun_ekrani.dart';
 import 'package:flutter/material.dart';
  

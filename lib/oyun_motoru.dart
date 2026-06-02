@@ -14,10 +14,19 @@ class OyunMotoru extends ChangeNotifier {
   List<List<int>> secimZinciri = []; 
   Timer? _zamanlayici; 
   
-  // GÜNCELLENDİ: Artık sadece 1 bloğu değil, havada süzülen TÜM blokları bir listede takip ediyoruz
+
   List<List<int>> aktifDusenBloklar = [];
 
   int yanlisIslemSayac = 0; 
+
+  int toplamPuan = 0;
+  int mevcutSure = 5;
+  bool oyunBittiMi = false;
+
+  //Sayıların puan değeri
+  final Map<int, int> puanHaritasi = {
+    1: 1, 2: 2, 3: 3, 4: 5, 5: 7, 6: 9, 7: 12, 8: 15, 9: 20
+  }
 
   OyunMotoru() {
     oyunAlaniniBaslat();
@@ -46,6 +55,13 @@ class OyunMotoru extends ChangeNotifier {
   }
 
   void oyunAlaniniBaslat() {
+    oyunBittiMi = false;
+    toplamPuan = 0;
+    mevcutSure = 5;
+    yanlisIslemSayac = 0;
+    secimZinciri.clear();
+    aktifDusenBloklar.clear();
+
     oyunAlani = List.generate(
       satirSayisi,
       (satirIndeksi) => List.generate(
@@ -66,27 +82,44 @@ class OyunMotoru extends ChangeNotifier {
   }
 
   void _zamanlayiciyiBaslat() {
-    _zamanlayici = Timer.periodic(const Duration(seconds: 1), (timer) {
+    _zamanlayaci?.cancel();
+    _zamanlayici = Timer.periodic(Duration(seconds: mevcutSure), (timer) {
+      if(oyunBittiMi){
+        timer.cancel();
+        return;
+      }
       _zamanlaAsagiKaydirVeUret();
     });
   }
 
-  // GÜNCELLENDİ: Artık listedeki tüm blokları süzülerek aşağı indiriyor
+  void _sureyiGuncelle(){
+    int yeniSure = 5;
+    if(toplamPuan >= 400) yeniSure = 1;
+    else if (toplamPuan >= 300) yeniSure = 2; 
+    else if (toplamPuan >= 200) yeniSure = 3; 
+    else if (toplamPuan >= 100) yeniSure = 4; 
+
+    if(yeniSure != mevcutSure){
+      mevcutSure = yeniSure;
+      _zamanlayaciBaslat();
+    }
+  }
+
   void _zamanlaAsagiKaydirVeUret() {
+    if (oyunBittiMi) return;
     bool degisiklikOldu = false;
     List<List<int>> yeniDusenler = [];
 
-    // 1. AŞAMA: Havada süzülen tüm blokları 1 adım aşağı kaydır
+
     for (var blokKord in aktifDusenBloklar) {
       int satir = blokKord[0];
       int sutun = blokKord[1];
 
-      // Altı boş mu ve zemine değmemiş mi?
+
       if (satir + 1 < satirSayisi && oyunAlani[satir + 1][sutun] == null) {
         oyunAlani[satir + 1][sutun] = oyunAlani[satir][sutun];
         oyunAlani[satir][sutun] = null;
 
-        // Düşen blok oyuncu tarafından o an seçiliyse seçim koordinatını da güncelle
         for (var secilenKord in secimZinciri) {
           if (secilenKord[0] == satir && secilenKord[1] == sutun) {
             secilenKord[0] = satir + 1;
@@ -94,26 +127,29 @@ class OyunMotoru extends ChangeNotifier {
           }
         }
         
-        // Blok hala düşmeye devam ettiği için yeni listeye ekle
         yeniDusenler.add([satir + 1, sutun]);
         degisiklikOldu = true;
       } 
-      // Else durumu: Blok bir şeye çarptıysa (veya zemindeyse) listeye eklemiyoruz, böylece sabitleniyor.
     }
     
-    // Aktif düşenler listesini güncelle
     aktifDusenBloklar = yeniDusenler;
 
-    // 2. AŞAMA: Eğer havada süzülen HİÇBİR blok kalmadıysa, tepeden 1 tane yeni rastgele blok üret
+
     if (aktifDusenBloklar.isEmpty) {
       int rastgeleSutun = _rastgele.nextInt(sutunSayisi);
-      if (oyunAlani[0][rastgeleSutun] == null) {
+
+      if (OyunAlani[0][rastgeleSutun] != null){
+        oyunBittimi = true;
+        _zamanlayaci?.cancel();
+        notifyListeners();
+        return;
+      }
         int rastgeleSayi = _rastgele.nextInt(9) + 1;
         oyunAlani[0][rastgeleSutun] = BlokModeli(
           number: rastgeleSayi,
           color: sayiRengiAl(rastgeleSayi),
         );
-        aktifDusenBloklar.add([0, rastgeleSutun]); // Yeni üretilen bloğu düşenler listesine ekle
+        aktifDusenBloklar.add([0, rastgeleSutun]); 
         degisiklikOldu = true;
       }
     }
@@ -130,28 +166,30 @@ class OyunMotoru extends ChangeNotifier {
   }
 
   void blokSec(int satir, int sutun) {
+    if(oyunBittiMi) return;
+
     BlokModeli? tiklananBlok = oyunAlani[satir][sutun];
     if (tiklananBlok == null) return;
 
     if (tiklananBlok.isSelected) {
-      tiklananBlok.isSelected = false;
-      secimZinciri.removeWhere((kord) => kord[0] == satir && kord[1] == sutun);
-      notifyListeners();
+      if(secimZinciri.isNotEmpty &&
+         secimZinciri.last[0] == satir &&
+         secimZinciri.last[1] == sutun){
+        tiklananBlok.isSelected = false;
+        secimZinciri.removeLast();
+        notifyListeners();
+        }
+
       return;
     }
 
     if (secimZinciri.length >= 4) return;
 
     if (secimZinciri.isNotEmpty) {
-      bool komsuBulundu = false;
-      for (var kord in secimZinciri) {
-        if (_komsuMu(kord[0], kord[1], satir, sutun)) {
-          komsuBulundu = true;
-          break;
-        }
+      var sonSecilen = secimZinciri.last;
+      if (!_komsuMu(sonSecilen[0], sonSecilen[1], satir, sutun)) {
+        return; // Komşu değilse seçtirirmez
       }
-
-      if (!komsuBulundu) return;
     }
 
     tiklananBlok.isSelected = true;
@@ -162,80 +200,98 @@ class OyunMotoru extends ChangeNotifier {
   int get mevcutToplam {
     int toplam = 0;
     for (var kord in secimZinciri) {
-      toplam += oyunAlani[kord[0]][kord[1]]!.number;
+      var blok = oyunAlani[kord[0]][kord[1]];
+      if (blok != null) toplam += blok.number;
     }
     return toplam;
   }
 
-  void _anindaAsagiKaydir() {
+  void _anindaAsagiKaydirVeDoldur() {
     for (int sutun = 0; sutun < sutunSayisi; sutun++) {
       for (int satir = satirSayisi - 1; satir >= 0; satir--) {
         if (oyunAlani[satir][sutun] == null) {
           for (int ustSatir = satir - 1; ustSatir >= 0; ustSatir--) {
             if (oyunAlani[ustSatir][sutun] != null) {
-              
-              // KRİTİK GÜNCELLEME: Eğer bu blok "düşmekte olanlar" listesindeyse, anında indirme! Bırak süzülsün.
               bool dusenBlokMu = aktifDusenBloklar.any((b) => b[0] == ustSatir && b[1] == sutun);
               if (dusenBlokMu) continue; 
 
               oyunAlani[satir][sutun] = oyunAlani[ustSatir][sutun];
               oyunAlani[ustSatir][sutun] = null;
-
-              for (var kord in secimZinciri) {
-                if (kord[0] == ustSatir && kord[1] == sutun) {
-                  kord[0] = satir;
-                  break;
-                }
-              }
               break;
             }
+          }
+        }
+      }
+
+      for (int satir = satirSayisi - 1; satir >= 0; satir--) {
+        if (oyunAlani[satir][sutun] == null) {
+          bool ustüBosMu = true;
+          for (int k = satir - 1; k >= 0; k--) {
+            if (oyunAlani[k][sutun] != null) {
+              ustüBosMu = false;
+              break;
+            }
+          }
+          if (ustüBosMu) {
+            int rastgeleSayi = _rastgele.nextInt(9) + 1;
+            oyunAlani[satir][sutun] = BlokModeli(
+              number: rastgeleSayi,
+              color: sayiRengiAl(rastgeleSayi),
+            );
           }
         }
       }
     }
   }
 
-  // GÜNCELLENDİ: Ceza yediğimizde oluşan 8 bloğu da "havada süzülenler" listesine atıyoruz.
+
   void _cezaUygula() {
     for (int sutun = 0; sutun < sutunSayisi; sutun++) {
-      if (oyunAlani[0][sutun] == null) {
-        int rastgeleSayi = _rastgele.nextInt(9) + 1;
-        oyunAlani[0][sutun] = BlokModeli(
-          number: rastgeleSayi,
-          color: sayiRengiAl(rastgeleSayi),
-        );
-        // Bu blokları listeye ekliyoruz ki timer bunları adım adım indirsin
-        aktifDusenBloklar.add([0, sutun]); 
+      if (oyunAlani[0][sutun] != null) {
+        oyunBittiMi = true;
+        _zamanlayici?.cancel();
+        return;
       }
+      
+      int rastgeleSayi = _rastgele.nextInt(9) + 1;
+      oyunAlani[0][sutun] = BlokModeli(
+        number: rastgeleSayi,
+        color: sayiRengiAl(rastgeleSayi),
+      );
+      aktifDusenBloklar.add([0, sutun]); 
     }
   }
 
-  int islemOnayla() {
+int islemOnayla() {
     if (secimZinciri.length < 2) return 0; 
 
-    if (mevcutToplam == hedefSayi) {
+    if (mevcutToplam == hedefSayi) { 
+      int hamlePuani = 0;
       for (var kord in secimZinciri) {
+        int sayi = oyunAlani[kord[0]][kord[1]]!.number;
+        hamlePuani += puanHaritasi[sayi] ?? 0; 
         oyunAlani[kord[0]][kord[1]] = null;
       }
 
-      _anindaAsagiKaydir();
+      toplamPuan += hamlePuani;
+      _sureyiGuncelle();
 
+      _anindaAsagiKaydirVeDoldur(); 
       secimZinciri.clear();
       yeniHedefSayiUret();
       yanlisIslemSayac = 0; 
       notifyListeners();
       return 1; 
     } else {
+
       for (var kord in secimZinciri) {
         oyunAlani[kord[0]][kord[1]]!.isSelected = false;
       }
       secimZinciri.clear();
       
       yanlisIslemSayac++;
-      if (yanlisIslemSayac >= 3) {
+      if (yanlisIslemSayac >= 3) { 
         _cezaUygula(); 
-        // DİKKAT: Buradaki _anindaAsagiKaydir(); satırını sildik! 
-        // Artık bloklar anında değil, Timer'ın insafında 5 saniyede bir inecek.
         yanlisIslemSayac = 0; 
         notifyListeners();
         return 3; 
@@ -244,7 +300,6 @@ class OyunMotoru extends ChangeNotifier {
       notifyListeners();
       return 2; 
     }
-  }
 
   @override
   void dispose() {
