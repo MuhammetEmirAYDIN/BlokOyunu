@@ -13,6 +13,7 @@ class OyunMotoru extends ChangeNotifier {
 
   List<List<int>> secimZinciri = []; 
   Timer? _zamanlayici; 
+  Timer? _dusmeTimeri;
   
 
   List<List<int>> aktifDusenBloklar = [];
@@ -26,12 +27,13 @@ class OyunMotoru extends ChangeNotifier {
   //Sayıların puan değeri
   final Map<int, int> puanHaritasi = {
     1: 1, 2: 2, 3: 3, 4: 5, 5: 7, 6: 9, 7: 12, 8: 15, 9: 20
-  }
+  };
 
   OyunMotoru() {
     oyunAlaniniBaslat();
     yeniHedefSayiUret();
-    _zamanlayiciyiBaslat(); 
+    _zamanlayiciyiBaslat();
+    _dusmeTimeriBaslat();
   }
 
   void yeniHedefSayiUret() {
@@ -82,7 +84,7 @@ class OyunMotoru extends ChangeNotifier {
   }
 
   void _zamanlayiciyiBaslat() {
-    _zamanlayaci?.cancel();
+    _zamanlayici?.cancel();
     _zamanlayici = Timer.periodic(Duration(seconds: mevcutSure), (timer) {
       if(oyunBittiMi){
         timer.cancel();
@@ -91,7 +93,37 @@ class OyunMotoru extends ChangeNotifier {
       _zamanlaAsagiKaydirVeUret();
     });
   }
+  void _dusmeTimeriBaslat() {
+  _dusmeTimeri?.cancel();
+  _dusmeTimeri = Timer.periodic(const Duration(milliseconds: 1000), (timer) {
+    if (oyunBittiMi) {
+      timer.cancel();
+      return;
+    }
+    _bloklariAsagiKaydirSadece();
+  });
+}
 
+void _bloklariAsagiKaydirSadece() {
+  if (aktifDusenBloklar.isEmpty) return;
+  bool degisiklikOldu = false;
+  List<List<int>> yeniDusenler = [];
+
+  for (var blokKord in aktifDusenBloklar) {
+    int satir = blokKord[0];
+    int sutun = blokKord[1];
+
+    if (satir + 1 < satirSayisi && oyunAlani[satir + 1][sutun] == null) {
+      oyunAlani[satir + 1][sutun] = oyunAlani[satir][sutun];
+      oyunAlani[satir][sutun] = null;
+      yeniDusenler.add([satir + 1, sutun]);
+      degisiklikOldu = true;
+    }
+  }
+
+  aktifDusenBloklar = yeniDusenler;
+  if (degisiklikOldu) notifyListeners();
+}
   void _sureyiGuncelle(){
     int yeniSure = 5;
     if(toplamPuan >= 400) yeniSure = 1;
@@ -101,7 +133,7 @@ class OyunMotoru extends ChangeNotifier {
 
     if(yeniSure != mevcutSure){
       mevcutSure = yeniSure;
-      _zamanlayaciBaslat();
+      _zamanlayiciyiBaslat();
     }
   }
 
@@ -134,30 +166,38 @@ class OyunMotoru extends ChangeNotifier {
     
     aktifDusenBloklar = yeniDusenler;
 
-
     if (aktifDusenBloklar.isEmpty) {
-      int rastgeleSutun = _rastgele.nextInt(sutunSayisi);
+      bool tumSutunlarDolu = false;
+      for (int s = 0; s < sutunSayisi; s++) {
+        if (oyunAlani[0][s] != null) {
+          tumSutunlarDolu = true;
+          break;
+        }
+      }
 
-      if (OyunAlani[0][rastgeleSutun] != null){
-        oyunBittimi = true;
-        _zamanlayaci?.cancel();
+      if (tumSutunlarDolu) {
+        oyunBittiMi = true;
+        _zamanlayici?.cancel();
+        _dusmeTimeri?.cancel();
         notifyListeners();
         return;
       }
-        int rastgeleSayi = _rastgele.nextInt(9) + 1;
-        oyunAlani[0][rastgeleSutun] = BlokModeli(
-          number: rastgeleSayi,
-          color: sayiRengiAl(rastgeleSayi),
-        );
-        aktifDusenBloklar.add([0, rastgeleSutun]); 
-        degisiklikOldu = true;
-      }
+
+    int rastgeleSutun = _rastgele.nextInt(sutunSayisi);
+    int rastgeleSayi = _rastgele.nextInt(9) + 1;
+    oyunAlani[0][rastgeleSutun] = BlokModeli(
+    number: rastgeleSayi,
+    color: sayiRengiAl(rastgeleSayi),
+    );
+    aktifDusenBloklar.add([0, rastgeleSutun]);
+
+    degisiklikOldu = true;
     }
 
     if (degisiklikOldu) {
       notifyListeners();
     }
-  }
+  } 
 
   bool _komsuMu(int satir1, int sutun1, int satir2, int sutun2) {
     int satirFarki = (satir1 - satir2).abs();
@@ -168,6 +208,9 @@ class OyunMotoru extends ChangeNotifier {
   void blokSec(int satir, int sutun) {
     if(oyunBittiMi) return;
 
+    bool dusenBlokMu = aktifDusenBloklar.any((b) => b[0] == satir && b[1] == sutun);
+    if (dusenBlokMu) return;
+    
     BlokModeli? tiklananBlok = oyunAlani[satir][sutun];
     if (tiklananBlok == null) return;
 
@@ -223,24 +266,6 @@ class OyunMotoru extends ChangeNotifier {
         }
       }
 
-      for (int satir = satirSayisi - 1; satir >= 0; satir--) {
-        if (oyunAlani[satir][sutun] == null) {
-          bool ustüBosMu = true;
-          for (int k = satir - 1; k >= 0; k--) {
-            if (oyunAlani[k][sutun] != null) {
-              ustüBosMu = false;
-              break;
-            }
-          }
-          if (ustüBosMu) {
-            int rastgeleSayi = _rastgele.nextInt(9) + 1;
-            oyunAlani[satir][sutun] = BlokModeli(
-              number: rastgeleSayi,
-              color: sayiRengiAl(rastgeleSayi),
-            );
-          }
-        }
-      }
     }
   }
 
@@ -300,10 +325,11 @@ int islemOnayla() {
       notifyListeners();
       return 2; 
     }
-
+}
   @override
   void dispose() {
-    _zamanlayici?.cancel(); 
+    _zamanlayici?.cancel();
+    _dusmeTimeri?.cancel();
     super.dispose();
   }
 }

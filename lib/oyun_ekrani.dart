@@ -108,7 +108,7 @@ class _OyunEkraniState extends State<OyunEkrani> {
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('OYUN BİTTİ!', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold), textAlign: Center),
+          title: const Text('OYUN BİTTİ!', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
