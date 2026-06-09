@@ -95,11 +95,13 @@ class OyunMotoru extends ChangeNotifier {
   }
   void _dusmeTimeriBaslat() {
   _dusmeTimeri?.cancel();
-  _dusmeTimeri = Timer.periodic(const Duration(milliseconds: 1000), (timer) {
+
+  int dusmeHizi = 200 + (mevcutSure - 1) * 150;
+  _dusmeTimeri = Timer.periodic(Duration(milliseconds: dusmeHizi), (timer) {
     if (oyunBittiMi) {
       timer.cancel();
       return;
-    }
+    } 
     _bloklariAsagiKaydirSadece();
   });
 }
@@ -134,70 +136,40 @@ void _bloklariAsagiKaydirSadece() {
     if(yeniSure != mevcutSure){
       mevcutSure = yeniSure;
       _zamanlayiciyiBaslat();
+      _dusmeTimeriBaslat();
     }
   }
 
   void _zamanlaAsagiKaydirVeUret() {
-    if (oyunBittiMi) return;
-    bool degisiklikOldu = false;
-    List<List<int>> yeniDusenler = [];
+  if (oyunBittiMi) return;
 
-
-    for (var blokKord in aktifDusenBloklar) {
-      int satir = blokKord[0];
-      int sutun = blokKord[1];
-
-
-      if (satir + 1 < satirSayisi && oyunAlani[satir + 1][sutun] == null) {
-        oyunAlani[satir + 1][sutun] = oyunAlani[satir][sutun];
-        oyunAlani[satir][sutun] = null;
-
-        for (var secilenKord in secimZinciri) {
-          if (secilenKord[0] == satir && secilenKord[1] == sutun) {
-            secilenKord[0] = satir + 1;
-            break;
-          }
-        }
-        
-        yeniDusenler.add([satir + 1, sutun]);
-        degisiklikOldu = true;
-      } 
+  if (aktifDusenBloklar.isEmpty) {
+    bool tumSutunlarDolu = false;
+    for (int s = 0; s < sutunSayisi; s++) {
+      if (oyunAlani[0][s] != null) {
+        tumSutunlarDolu = true;
+        break;
+      }
     }
-    
-    aktifDusenBloklar = yeniDusenler;
 
-    if (aktifDusenBloklar.isEmpty) {
-      bool tumSutunlarDolu = false;
-      for (int s = 0; s < sutunSayisi; s++) {
-        if (oyunAlani[0][s] != null) {
-          tumSutunlarDolu = true;
-          break;
-        }
-      }
-
-      if (tumSutunlarDolu) {
-        oyunBittiMi = true;
-        _zamanlayici?.cancel();
-        _dusmeTimeri?.cancel();
-        notifyListeners();
-        return;
-      }
+    if (tumSutunlarDolu) {
+      oyunBittiMi = true;
+      _zamanlayici?.cancel();
+      _dusmeTimeri?.cancel();
+      notifyListeners();
+      return;
+    }
 
     int rastgeleSutun = _rastgele.nextInt(sutunSayisi);
     int rastgeleSayi = _rastgele.nextInt(9) + 1;
     oyunAlani[0][rastgeleSutun] = BlokModeli(
-    number: rastgeleSayi,
-    color: sayiRengiAl(rastgeleSayi),
+      number: rastgeleSayi,
+      color: sayiRengiAl(rastgeleSayi),
     );
     aktifDusenBloklar.add([0, rastgeleSutun]);
-
-    degisiklikOldu = true;
-    }
-
-    if (degisiklikOldu) {
-      notifyListeners();
-    }
-  } 
+    notifyListeners();
+  }
+} 
 
   bool _komsuMu(int satir1, int sutun1, int satir2, int sutun2) {
     int satirFarki = (satir1 - satir2).abs();
